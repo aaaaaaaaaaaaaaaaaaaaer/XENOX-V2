@@ -1,0 +1,58 @@
+--[[
+    XELIB
+    A minimal, sharp-looking Roblox interface library.
+
+    This library ships no Settings tab, no config files, no theme editor and no
+    background effects. Everything is configured by the script that creates the
+    window, and anything user-facing you build yourself with the same elements.
+
+    Example:
+
+        local Library = loadstring(game:HttpGet("..."))()
+
+        local Window = Library:MakeWindow({
+            Name = "Nexus",
+            SubTitle = "v1.4.0",
+            Theme = {
+                Accent = Color3.fromRGB(124, 96, 255),
+            },
+            ToggleKey = Enum.KeyCode.RightControl,
+        })
+
+        local Main = Window:AddTab("Main")
+        Main:AddSection("COMBAT")
+        Main:AddToggle("Aimbot", false, function(state)
+            print("aimbot", state)
+        end)
+        Main:AddSlider("FOV", 10, 360, 90, function(value)
+            print("fov", value)
+        end)
+
+        local Settings = Window:AddTab("Settings")
+        Settings:AddColorPicker("Accent", Color3.fromRGB(124, 96, 255), function(color)
+            Window:SetAccent(color)
+        end)
+
+    Window methods:
+        Window:AddTab(name[, description])
+        Window:MakeTab({ Name, Icon, Description })
+        Window:Notify(title, message, duration)
+        Window:SetTheme(partialTheme)
+        Window:SetAccent(color)
+        Window:SetToggleKey(keyCode)
+        Window:Toggle([force])
+        Window:Destroy()
+
+    Tab methods:
+        Tab:AddSection(text)
+        Tab:AddDivider()
+        Tab:AddLabel(text)
+        Tab:AddParagraph(title, body)
+        Tab:AddButton(text, callback[, description][, style])
+        Tab:AddToggle(text, default, callback[, description][, stateLabels])
+        Tab:AddSlider(text, min, max, default, callback[, description])
+        Tab:AddDropdown(text, options, callback[, description])
+        Tab:AddInput(text, default, callback[, description])
+        Tab:AddKeybind(text, defaultKey, callback[, description])
+        Tab:AddColorPicker(text, defaultColor, callback[, description])
+]]
