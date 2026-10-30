@@ -1,3 +1,62 @@
+--[[
+    XELIB
+    A minimal, sharp-looking Roblox interface library.
+
+    This library ships no Settings tab, no config files, no theme editor and no
+    background effects. Everything is configured by the script that creates the
+    window, and anything user-facing you build yourself with the same elements.
+
+    Example:
+
+        local Library = loadstring(game:HttpGet("..."))()
+
+        local Window = Library:MakeWindow({
+            Name = "Nexus",
+            SubTitle = "v1.4.0",
+            Theme = {
+                Accent = Color3.fromRGB(124, 96, 255),
+            },
+            ToggleKey = Enum.KeyCode.RightControl,
+        })
+
+        local Main = Window:AddTab("Main")
+        Main:AddSection("COMBAT")
+        Main:AddToggle("Aimbot", false, function(state)
+            print("aimbot", state)
+        end)
+        Main:AddSlider("FOV", 10, 360, 90, function(value)
+            print("fov", value)
+        end)
+
+        local Settings = Window:AddTab("Settings")
+        Settings:AddColorPicker("Accent", Color3.fromRGB(124, 96, 255), function(color)
+            Window:SetAccent(color)
+        end)
+
+    Window methods:
+        Window:AddTab(name[, description])
+        Window:MakeTab({ Name, Icon, Description })
+        Window:Notify(title, message, duration)
+        Window:SetTheme(partialTheme)
+        Window:SetAccent(color)
+        Window:SetToggleKey(keyCode)
+        Window:Toggle([force])
+        Window:Destroy()
+
+    Tab methods:
+        Tab:AddSection(text)
+        Tab:AddDivider()
+        Tab:AddLabel(text)
+        Tab:AddParagraph(title, body)
+        Tab:AddButton(text, callback[, description][, style])
+        Tab:AddToggle(text, default, callback[, description][, stateLabels])
+        Tab:AddSlider(text, min, max, default, callback[, description])
+        Tab:AddDropdown(text, options, callback[, description])
+        Tab:AddInput(text, default, callback[, description])
+        Tab:AddKeybind(text, defaultKey, callback[, description])
+        Tab:AddColorPicker(text, defaultColor, callback[, description])
+]]
+
 local XELIB = {}
 XELIB.__index = XELIB
 
@@ -7,6 +66,7 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local TextService = game:GetService("TextService")
 local CoreGui = game:GetService("CoreGui")
+local GuiService = game:GetService("GuiService")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = nil
@@ -142,14 +202,14 @@ local function colorToHex(color)
     )
 end
 
-local function isInside(object, x, y)
-    if not object or not object.Parent then
+local function isInside(object, point)
+    if not object or not object.Parent or not object.Visible then
         return false
     end
     local position = object.AbsolutePosition
     local size = object.AbsoluteSize
-    return x >= position.X and x <= position.X + size.X
-        and y >= position.Y and y <= position.Y + size.Y
+    return point.X >= position.X and point.X <= position.X + size.X
+        and point.Y >= position.Y and point.Y <= position.Y + size.Y
 end
 
 local function mergeTheme(base, override)
@@ -292,7 +352,6 @@ function XELIB:MakeWindow(config)
     local themeBindings = {}
     local popovers = {}
 
-    -- Declared up front so helpers defined below capture the local, not a global.
     local screenGui = nil
     local toggleButton = nil
 
@@ -540,11 +599,11 @@ function XELIB:MakeWindow(config)
         BorderSizePixel = 0,
         ClipsDescendants = true,
         Active = true,
+        ZIndex = 1,
     }, screenGui)
     addCorner(main, 10)
 
     local mainStroke = addStroke(main, theme.Stroke, 1, 0)
-
     local uiScale = create("UIScale", { Scale = 1 }, main)
 
     bindTheme(function(active)
@@ -1407,7 +1466,6 @@ function XELIB:MakeWindow(config)
             local function setValue(newValue, fire)
                 value = math.clamp(tonumber(newValue) or min, min, max)
                 local alpha = (max == min) and 0 or (value - min) / (max - min)
-                -- Set directly: tweens on a dragged slider lag behind the cursor.
                 valueLabel.Text = tostring(value)
                 fill.Size = UDim2.new(alpha, 0, 1, 0)
                 knob.Position = UDim2.new(alpha, 0, 0.5, 0)
@@ -1497,7 +1555,7 @@ function XELIB:MakeWindow(config)
                 BorderSizePixel = 0,
                 Text = "",
                 AutoButtonColor = false,
-                ZIndex = 2,
+                ZIndex = 20,
             }, row)
             addCorner(button, 6)
             local buttonStroke = addStroke(button, theme.Stroke, 1, 0.2)
@@ -1512,14 +1570,14 @@ function XELIB:MakeWindow(config)
                 TextXAlignment = Enum.TextXAlignment.Left,
                 TextColor3 = theme.Text,
                 TextTruncate = Enum.TextTruncate.AtEnd,
-                ZIndex = 3,
+                ZIndex = 21,
             }, button)
 
             local chevron = create("Frame", {
                 Position = UDim2.new(1, -19, 0.5, -3),
                 Size = UDim2.fromOffset(10, 7),
                 BackgroundTransparency = 1,
-                ZIndex = 3,
+                ZIndex = 21,
             }, button)
             local chevronLeft = create("Frame", {
                 Position = UDim2.fromOffset(0, 3),
@@ -1527,7 +1585,7 @@ function XELIB:MakeWindow(config)
                 BackgroundColor3 = theme.Muted,
                 BorderSizePixel = 0,
                 Rotation = 45,
-                ZIndex = 3,
+                ZIndex = 22,
             }, chevron)
             local chevronRight = create("Frame", {
                 Position = UDim2.fromOffset(4, 3),
@@ -1535,7 +1593,7 @@ function XELIB:MakeWindow(config)
                 BackgroundColor3 = theme.Muted,
                 BorderSizePixel = 0,
                 Rotation = -45,
-                ZIndex = 3,
+                ZIndex = 22,
             }, chevron)
 
             bindTheme(function(active)
@@ -1556,12 +1614,13 @@ function XELIB:MakeWindow(config)
             end)
 
             local popup = create("Frame", {
+                Name = "DropdownPopup",
                 Size = UDim2.fromOffset(150, 0),
                 BackgroundColor3 = theme.SurfaceAlt,
                 BorderSizePixel = 0,
                 ClipsDescendants = true,
                 Visible = false,
-                ZIndex = 500,
+                ZIndex = 1000,
             }, screenGui)
             addCorner(popup, 8)
             local popupStroke = addStroke(popup, theme.Stroke, 1, 0)
@@ -1576,7 +1635,7 @@ function XELIB:MakeWindow(config)
                 ScrollBarThickness = 2,
                 ScrollBarImageColor3 = theme.Stroke,
                 ScrollBarImageTransparency = 0.3,
-                ZIndex = 501,
+                ZIndex = 1001,
             }, popup)
             create("UIListLayout", {
                 Padding = UDim.new(0, 2),
@@ -1642,7 +1701,7 @@ function XELIB:MakeWindow(config)
                 popup.Position = UDim2.fromOffset(x, y)
                 popup.Size = UDim2.fromOffset(150, 0)
                 popup.Visible = true
-                safeTween(popup, ANIM.Normal, { Size = UDim2.fromOffset(150, wanted) })
+                safeTween(popup, ANIM.Fast, { Size = UDim2.fromOffset(150, wanted) })
                 safeTween(popupStroke, ANIM.Fast, { Transparency = 0 })
                 safeTween(chevron, ANIM.Normal, { Rotation = 180 })
                 safeTween(buttonStroke, ANIM.Fast, { Color = theme.Accent, Transparency = 0 })
@@ -1658,6 +1717,7 @@ function XELIB:MakeWindow(config)
 
             for index, option in ipairs(items) do
                 local optionButton = create("TextButton", {
+                    Name = "Option_" .. tostring(option),
                     Size = UDim2.new(1, 0, 0, 26),
                     BackgroundColor3 = theme.SurfaceAlt,
                     BackgroundTransparency = 1,
@@ -1665,7 +1725,8 @@ function XELIB:MakeWindow(config)
                     Text = "",
                     AutoButtonColor = false,
                     LayoutOrder = index,
-                    ZIndex = 502,
+                    ZIndex = 1002,
+                    Active = true,
                 }, list)
                 addCorner(optionButton, 5)
 
@@ -1679,7 +1740,7 @@ function XELIB:MakeWindow(config)
                     TextXAlignment = Enum.TextXAlignment.Left,
                     TextColor3 = theme.Muted,
                     TextTruncate = Enum.TextTruncate.AtEnd,
-                    ZIndex = 503,
+                    ZIndex = 1003,
                 }, optionButton)
 
                 optionButton.MouseEnter:Connect(function()
@@ -1698,13 +1759,15 @@ function XELIB:MakeWindow(config)
                     end
                 end)
 
-                optionButton.MouseButton1Click:Connect(function()
-                    selected = option
-                    buttonLabel.Text = selected
-                    refreshOptions()
-                    close()
-                    if type(callback) == "function" then
-                        pcall(callback, selected)
+                optionButton.InputBegan:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        selected = option
+                        buttonLabel.Text = selected
+                        refreshOptions()
+                        close()
+                        if type(callback) == "function" then
+                            pcall(callback, selected)
+                        end
                     end
                 end)
 
@@ -1723,14 +1786,20 @@ function XELIB:MakeWindow(config)
                 if not isOpen then
                     return
                 end
-                if input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+                if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
                     return
                 end
-                local mouse = UserInputService:GetMouseLocation()
-                if not isInside(popup, mouse.X, mouse.Y)
-                    and not isInside(button, mouse.X, mouse.Y) then
-                    close()
-                end
+                
+                task.defer(function()
+                    if not isOpen then return end
+                    local rawMouse = UserInputService:GetMouseLocation()
+                    local inset = GuiService:GetGuiInset()
+                    local mouse = Vector2.new(rawMouse.X - inset.X, rawMouse.Y - inset.Y)
+
+                    if not isInside(popup, mouse) and not isInside(button, mouse) then
+                        close()
+                    end
+                end)
             end))
 
             attachTooltip(row, description)
@@ -1954,7 +2023,7 @@ function XELIB:MakeWindow(config)
                 BorderSizePixel = 0,
                 ClipsDescendants = true,
                 Visible = false,
-                ZIndex = 600,
+                ZIndex = 1200,
             }, screenGui)
             addCorner(popup, 8)
             local popupStroke = addStroke(popup, theme.Stroke, 1, 0)
@@ -1965,7 +2034,7 @@ function XELIB:MakeWindow(config)
                 BackgroundColor3 = Color3.fromHSV(hue, 1, 1),
                 Image = "rbxassetid://4155801252",
                 BorderSizePixel = 0,
-                ZIndex = 601,
+                ZIndex = 1201,
             }, popup)
             addCorner(saturationBox, 4)
             addStroke(saturationBox, theme.Stroke, 1, 0.6)
@@ -1976,7 +2045,7 @@ function XELIB:MakeWindow(config)
                 Size = UDim2.fromOffset(10, 10),
                 BackgroundColor3 = Color3.new(1, 1, 1),
                 BorderSizePixel = 0,
-                ZIndex = 602,
+                ZIndex = 1202,
             }, saturationBox)
             addCorner(saturationCursor, 5)
             addStroke(saturationCursor, Color3.new(0, 0, 0), 1, 0.25)
@@ -1986,7 +2055,7 @@ function XELIB:MakeWindow(config)
                 Size = UDim2.fromOffset(12, 156),
                 BackgroundColor3 = Color3.new(1, 1, 1),
                 BorderSizePixel = 0,
-                ZIndex = 601,
+                ZIndex = 1201,
             }, popup)
             addCorner(hueBar, 6)
             create("UIGradient", {
@@ -2008,7 +2077,7 @@ function XELIB:MakeWindow(config)
                 Size = UDim2.fromOffset(18, 4),
                 BackgroundColor3 = Color3.new(1, 1, 1),
                 BorderSizePixel = 0,
-                ZIndex = 602,
+                ZIndex = 1202,
             }, hueBar)
             addCorner(hueCursor, 2)
             addStroke(hueCursor, Color3.new(0, 0, 0), 1, 0.3)
@@ -2022,7 +2091,7 @@ function XELIB:MakeWindow(config)
                 TextSize = 11,
                 TextXAlignment = Enum.TextXAlignment.Left,
                 TextColor3 = theme.Muted,
-                ZIndex = 601,
+                ZIndex = 1201,
             }, popup)
 
             bindTheme(function(active)
@@ -2032,8 +2101,6 @@ function XELIB:MakeWindow(config)
                 hexLabel.TextColor3 = active.Muted
             end)
 
-            -- Renders from the HSV state directly. Converting a color back to HSV
-            -- on every frame would reset the hue whenever saturation hits zero.
             local function render(fire)
                 local color = Color3.fromHSV(hue, saturation, value)
 
@@ -2110,7 +2177,7 @@ function XELIB:MakeWindow(config)
                 Size = UDim2.fromOffset(156, 156),
                 BackgroundTransparency = 1,
                 Text = "",
-                ZIndex = 603,
+                ZIndex = 1203,
             }, popup).MouseButton1Down:Connect(function()
                 activeDrag = "saturation"
             end)
@@ -2120,7 +2187,7 @@ function XELIB:MakeWindow(config)
                 Size = UDim2.fromOffset(12, 156),
                 BackgroundTransparency = 1,
                 Text = "",
-                ZIndex = 603,
+                ZIndex = 1203,
             }, popup).MouseButton1Down:Connect(function()
                 activeDrag = "hue"
             end)
@@ -2130,7 +2197,9 @@ function XELIB:MakeWindow(config)
                     return
                 end
 
-                local mouse = UserInputService:GetMouseLocation()
+                local rawMouse = UserInputService:GetMouseLocation()
+                local inset = GuiService:GetGuiInset()
+                local mouse = Vector2.new(rawMouse.X - inset.X, rawMouse.Y - inset.Y)
 
                 if activeDrag == "hue" then
                     hue = math.clamp(
@@ -2164,14 +2233,18 @@ function XELIB:MakeWindow(config)
             end))
 
             table.insert(Window._connections, UserInputService.InputBegan:Connect(function(input)
-                if not isOpen or input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+                if not isOpen or (input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch) then
                     return
                 end
-                local mouse = UserInputService:GetMouseLocation()
-                if not isInside(popup, mouse.X, mouse.Y)
-                    and not isInside(swatch, mouse.X, mouse.Y) then
-                    close()
-                end
+                task.defer(function()
+                    if not isOpen then return end
+                    local rawMouse = UserInputService:GetMouseLocation()
+                    local inset = GuiService:GetGuiInset()
+                    local mouse = Vector2.new(rawMouse.X - inset.X, rawMouse.Y - inset.Y)
+                    if not isInside(popup, mouse) and not isInside(swatch, mouse) then
+                        close()
+                    end
+                end)
             end))
 
             render(false)
@@ -2207,7 +2280,7 @@ function XELIB:MakeWindow(config)
         Position = UDim2.new(1, -296, 0, 12),
         Size = UDim2.new(0, 280, 1, -24),
         BackgroundTransparency = 1,
-        ZIndex = 800,
+        ZIndex = 2000,
     }, screenGui)
     create("UIListLayout", {
         Padding = UDim.new(0, 8),
@@ -2237,7 +2310,7 @@ function XELIB:MakeWindow(config)
             AutoButtonColor = false,
             ClipsDescendants = true,
             LayoutOrder = notificationOrder,
-            ZIndex = 801,
+            ZIndex = 2001,
         }, notificationContainer)
         addCorner(card, 8)
         local cardStroke = addStroke(card, theme.Stroke, 1, 1)
@@ -2249,7 +2322,7 @@ function XELIB:MakeWindow(config)
             BackgroundColor3 = theme.Accent,
             BorderSizePixel = 0,
             BackgroundTransparency = 1,
-            ZIndex = 802,
+            ZIndex = 2002,
         }, card)
         addCorner(accent, 1.5)
 
@@ -2264,7 +2337,7 @@ function XELIB:MakeWindow(config)
             TextColor3 = theme.Text,
             TextTransparency = 1,
             TextTruncate = Enum.TextTruncate.AtEnd,
-            ZIndex = 802,
+            ZIndex = 2002,
         }, card)
 
         local messageLabel = create("TextLabel", {
@@ -2278,7 +2351,7 @@ function XELIB:MakeWindow(config)
             TextColor3 = theme.Muted,
             TextTransparency = 1,
             TextTruncate = Enum.TextTruncate.AtEnd,
-            ZIndex = 802,
+            ZIndex = 2002,
         }, card)
 
         local progress = create("Frame", {
@@ -2287,7 +2360,7 @@ function XELIB:MakeWindow(config)
             BackgroundColor3 = theme.Accent,
             BorderSizePixel = 0,
             BackgroundTransparency = 1,
-            ZIndex = 802,
+            ZIndex = 2002,
         }, card)
 
         bindTheme(function(active)
@@ -2541,9 +2614,6 @@ function XELIB:MakeWindow(config)
     searchBox:GetPropertyChangedSignal("Text"):Connect(function()
         applyFilter(tabs[activeTabId], searchBox.Text)
     end)
-
-    -- Tabs are created by the script after this returns; the first one
-    -- activates itself. Until then the content area stays empty.
 
     uiScale.Scale = 0.97
     safeTween(uiScale, ANIM.Normal, { Scale = 1 })
